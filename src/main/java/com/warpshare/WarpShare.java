@@ -1,5 +1,6 @@
 package com.warpshare;
 
+import atlantafx.base.theme.CupertinoDark;
 import javafx.application.Application;
 import javafx.collections.ObservableList;
 import javafx.scene.Scene;
@@ -17,6 +18,7 @@ public class WarpShare extends Application {
 
     @Override
     public void start(Stage stage) {
+        Application.setUserAgentStylesheet(new CupertinoDark().getUserAgentStylesheet());
         this.primaryStage = stage;
         primaryStage.setTitle("WarpShare");
 

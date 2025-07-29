@@ -78,7 +78,7 @@ public class SendPanel {
     public void sendFiles() {
         if (selectedFiles.isEmpty() || receiverService == null) return;
 
-        String targetHost = receiverService.getServer();
+        String targetHost = receiverService.getInetAddress().getHostAddress(); // Use IP directly
         int targetPort = receiverService.getPort();
 
         new Thread(() -> {

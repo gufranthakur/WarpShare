@@ -38,18 +38,8 @@ public class HttpServerService {
     }
 
     public SSLContext createSSLContext() throws Exception {
-        KeyStore keyStore = KeyStore.getInstance("JKS");
-        keyStore.load(null, null);
-
-        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-        kmf.init(keyStore, "password".toCharArray());
-
-        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-        tmf.init((KeyStore) null);
-
         SSLContext sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
-
+        sslContext.init(null, null, null);
         return sslContext;
     }
 

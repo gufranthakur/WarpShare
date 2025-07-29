@@ -30,7 +30,7 @@ public class HttpClientService {
                     .loadTrustMaterial(null, (chain, authType) -> true)
                     .build();
 
-            SSLConnectionSocketFactory sslFactory = new SSLConnectionSocketFactory(sslContext);
+
             var sslSocketFactory = SSLConnectionSocketFactoryBuilder.create()
                     .setSslContext(sslContext)
                     .build();
