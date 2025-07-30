@@ -33,6 +33,8 @@ public class HttpServerService {
     // Removed createSSLContext method entirely
 
     public class FileUploadHandler implements HttpHandler {
+        private String fileName;
+
         public void handle(HttpExchange exchange) throws IOException {
             if ("POST".equals(exchange.getRequestMethod())) {
                 handleFileUpload(exchange);
@@ -44,7 +46,29 @@ public class HttpServerService {
         public void handleFileUpload(HttpExchange exchange) throws IOException {
             InputStream inputStream = exchange.getRequestBody();
 
-            String fileName = "received_file_" + System.currentTimeMillis();
+            // Extract filename from Content-Disposition header
+            String contentDisposition = exchange.getRequestHeaders().getFirst("Content-Disposition");
+            fileName = "received_file_" + System.currentTimeMillis(); // fallback
+
+            if (contentDisposition != null && contentDisposition.contains("filename=")) {
+                int start = contentDisposition.indexOf("filename=") + 9;
+                int end = contentDisposition.indexOf(";", start);
+                if (end == -1) end = contentDisposition.length();
+                fileName = contentDisposition.substring(start, end).replace("\"", "").trim();
+            }
+
+            // Alternative: Parse multipart data properly
+            // For now, let's use a simpler approach - extract from multipart boundary
+            String boundary = null;
+            String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+            if (contentType != null && contentType.contains("boundary=")) {
+                boundary = contentType.substring(contentType.indexOf("boundary=") + 9);
+            }
+
+            if (boundary != null) {
+                fileName = parseMultipartFilename(inputStream, boundary);
+            }
+
             Path filePath = Paths.get(System.getProperty("user.home"), "Downloads", fileName);
 
             try (FileOutputStream fos = new FileOutputStream(filePath.toFile())) {
@@ -69,8 +93,30 @@ public class HttpServerService {
                 os.write(response.getBytes());
             }
         }
-    }
 
+        private String parseMultipartFilename(InputStream inputStream, String boundary) {
+            // Simple multipart parsing to extract filename
+            try {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.contains("Content-Disposition") && line.contains("filename=")) {
+                        int start = line.indexOf("filename=") + 10; // +10 for 'filename="'
+                        int end = line.lastIndexOf("\"");
+                        if (start < end) {
+                            return line.substring(start, end);
+                        }
+                    }
+                    if (line.trim().isEmpty()) break; // End of headers
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return "received_file_" + System.currentTimeMillis();
+        }
+
+
+    }
     public void stop() {
         if (server != null) {
             server.stop(0);
