@@ -63,6 +63,9 @@ public class SearchSenderPanel {
             e.printStackTrace();
         }
     }
+    //liux - windows - empty
+    //linux - wind10 - ok
+
 
     public void stopServices() {
         try {

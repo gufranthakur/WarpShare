@@ -31,8 +31,10 @@ public class HttpClientService {
 
     public void sendSingleFile(CloseableHttpClient httpClient, File file, String targetHost, int targetPort)
             throws IOException {
-        // Changed from https to http
         String url = "http://" + targetHost + ":" + targetPort + "/upload";
+        System.out.println("Sending file to: " + url);
+        System.out.println("File: " + file.getAbsolutePath());
+
         HttpPost post = new HttpPost(url);
 
         HttpEntity entity = MultipartEntityBuilder.create()
@@ -42,7 +44,17 @@ public class HttpClientService {
         post.setEntity(entity);
 
         try (CloseableHttpResponse response = httpClient.execute(post)) {
-            System.out.println("Response: " + response.getCode());
+            System.out.println("Response Code: " + response.getCode());
+            System.out.println("Response Reason: " + response.getReasonPhrase());
+
+            if (response.getEntity() != null) {
+                String responseBody = new String(response.getEntity().getContent().readAllBytes());
+                System.out.println("Response Body: " + responseBody);
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to send file:");
+            e.printStackTrace();
         }
     }
+
 }
