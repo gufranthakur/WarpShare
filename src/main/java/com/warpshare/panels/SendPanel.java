@@ -78,7 +78,20 @@ public class SendPanel {
     public void sendFiles() {
         if (selectedFiles.isEmpty() || receiverService == null) return;
 
-        String targetHost = receiverService.getInetAddress().getHostAddress(); // Use IP directly
+        String targetHost;
+        if (receiverService.getInetAddress() != null) {
+            targetHost = receiverService.getInetAddress().getHostAddress();
+        } else {
+            // Extract IP from service name for manual connections
+            String serviceName = receiverService.getName();
+            if (serviceName.startsWith("Manual-")) {
+                targetHost = serviceName.substring(7); // Remove "Manual-" prefix
+            } else {
+                System.out.println("Cannot resolve target host");
+                return;
+            }
+        }
+
         int targetPort = receiverService.getPort();
 
         new Thread(() -> {
