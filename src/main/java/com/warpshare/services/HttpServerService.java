@@ -62,7 +62,7 @@ public class HttpServerService {
 
             try (FileOutputStream fos = new FileOutputStream(filePath.toFile())) {
                 fos.write(result.content);
-                System.out.println("File saved to: " + filePath.toString());
+                System.out.println("File saved to: " + filePath);
             }
 
             Platform.runLater(() -> {

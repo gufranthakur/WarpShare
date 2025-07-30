@@ -3,13 +3,25 @@ package com.warpshare.panels;
 import com.warpshare.WarpShare;
 import com.warpshare.services.HttpServerService;
 import com.warpshare.services.NetworkService;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressIndicator;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
+
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.Enumeration;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class SearchSenderPanel {
     public WarpShare app;
@@ -19,61 +31,219 @@ public class SearchSenderPanel {
     public ObservableList<String> receivedFiles;
     public static final int SERVER_PORT = 8443;
 
+    private ExecutorService executor;
+    private Label statusLabel;
+    private ProgressIndicator progressIndicator;
+    private Button backButton;
+
     public SearchSenderPanel(WarpShare app) {
         this.app = app;
         this.networkService = new NetworkService();
         this.httpServer = new HttpServerService();
         this.receivedFiles = FXCollections.observableArrayList();
+        this.executor = Executors.newCachedThreadPool();
         createPanel();
-        startListening();
+        startListeningAsync();
     }
 
     public void createPanel() {
         root = new BorderPane();
+        root.setPadding(new Insets(30));
 
-        Label title = new Label("Waiting for sender...");
-        Label status = new Label("Listening on port " + SERVER_PORT);
-        Button backButton = new Button("Back");
+        Label title = new Label("Starting WarpShare Service...");
+        title.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
+                "-fx-font-size: 24px; " +
+                "-fx-font-weight: bold; " +
+                "-fx-text-fill: #0866ff;");
+
+        statusLabel = new Label("Initializing...");
+        statusLabel.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
+                "-fx-font-size: 14px; " +
+                "-fx-text-fill: #6c757d;");
+
+        progressIndicator = new ProgressIndicator();
+        progressIndicator.setProgress(-1);
+        progressIndicator.setStyle("-fx-accent: #007bff; " +
+                "-fx-pref-width: 50; " +
+                "-fx-pref-height: 50;");
+
+        backButton = new Button("Back");
+        backButton.setDisable(true);
+        backButton.setStyle("-fx-background-color: #6c757d; " +
+                "-fx-text-fill: white; " +
+                "-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
+                "-fx-font-size: 14px; " +
+                "-fx-font-weight: 500; " +
+                "-fx-background-radius: 8; " +
+                "-fx-border-radius: 8; " +
+                "-fx-cursor: hand; " +
+                "-fx-padding: 12 24 12 24; " +
+                "-fx-pref-width: 100;");
 
         backButton.setOnAction(e -> {
             stopServices();
             app.showHomePanel();
         });
 
-        VBox center = new VBox(10);
+        VBox center = new VBox(20);
         center.setAlignment(Pos.CENTER);
-        center.getChildren().addAll(title, status);
+        center.setPadding(new Insets(40, 20, 40, 20));
+        center.getChildren().addAll(title, statusLabel, progressIndicator);
+
+        VBox bottomContainer = new VBox();
+        bottomContainer.setAlignment(Pos.CENTER);
+        bottomContainer.setPadding(new Insets(20, 0, 0, 0));
+        bottomContainer.getChildren().add(backButton);
 
         root.setCenter(center);
-        root.setBottom(backButton);
+        root.setBottom(bottomContainer);
     }
 
-    public void startListening() {
-        try {
-            httpServer.startServer(SERVER_PORT, receivedFiles, progress -> {
-                if (!receivedFiles.isEmpty()) {
-                    app.showReceivePanel("Remote Sender", receivedFiles, httpServer);
-                }
-            });
+    public void startListeningAsync() {
+        Task<Void> startupTask = new Task<Void>() {
+            @Override
+            protected Void call() throws Exception {
+                Platform.runLater(() -> statusLabel.setText("Starting HTTP server..."));
 
-            String deviceName = "WarpShare-" + System.getProperty("user.name");
-            networkService.startAdvertising(SERVER_PORT, deviceName);
+                httpServer.startServer(SERVER_PORT, receivedFiles, progress -> {
+                    Platform.runLater(() -> {
+                        if (!receivedFiles.isEmpty()) {
+                            app.showReceivePanel("Remote Sender", receivedFiles, httpServer);
+                        }
+                    });
+                });
 
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+                Thread.sleep(500);
+
+                Platform.runLater(() -> statusLabel.setText("Starting mDNS advertising..."));
+
+                String deviceName = "WarpShare-" + System.getProperty("user.name");
+                networkService.startAdvertising(SERVER_PORT, deviceName);
+
+                Thread.sleep(500);
+
+                return null;
+            }
+
+            @Override
+            protected void succeeded() {
+                Platform.runLater(() -> {
+                    statusLabel.setText("Ready! Listening on port " + SERVER_PORT);
+                    statusLabel.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
+                            "-fx-font-size: 14px; " +
+                            "-fx-text-fill: #28a745;");
+                    progressIndicator.setVisible(false);
+                    backButton.setDisable(false);
+                    backButton.setStyle("-fx-background-color: #007bff; " +
+                            "-fx-text-fill: white; " +
+                            "-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
+                            "-fx-font-size: 14px; " +
+                            "-fx-font-weight: 500; " +
+                            "-fx-background-radius: 8; " +
+                            "-fx-border-radius: 8; " +
+                            "-fx-cursor: hand; " +
+                            "-fx-padding: 12 24 12 24; " +
+                            "-fx-pref-width: 100;");
+
+                    // Replace title
+                    Label title = new Label("Waiting for sender...");
+                    title.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
+                            "-fx-font-size: 24px; " +
+                            "-fx-font-weight: bold; " +
+                            "-fx-text-fill: #337aff;");
+
+                    // Load and set image
+                    ImageView imageView = new ImageView(new Image(getClass().getResourceAsStream("/receiver.png")));
+                    imageView.setFitHeight(100);
+                    imageView.setPreserveRatio(true);
+
+                    // Fetch IP Address
+                    String ipAddress = "Unavailable";
+                    try {
+                        Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+                        while (interfaces.hasMoreElements()) {
+                            NetworkInterface iface = interfaces.nextElement();
+                            if (iface.isLoopback() || !iface.isUp()) continue;
+                            Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                            while (addresses.hasMoreElements()) {
+                                InetAddress addr = addresses.nextElement();
+                                if (!addr.isLoopbackAddress() && addr.getHostAddress().indexOf(':') == -1) {
+                                    ipAddress = addr.getHostAddress();
+                                    break;
+                                }
+                            }
+                            if (!ipAddress.equals("Unavailable")) break;
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+
+                    Label ipLabel = new Label("Your IP address is: ");
+                    Label ipValue = new Label(ipAddress);
+                    ipLabel.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
+                            "-fx-font-size: 16px; " +
+                            "-fx-text-fill: white;");
+                    ipValue.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
+                            "-fx-font-size: 16px; " +
+                            "-fx-text-fill: #007bff;");
+
+                    VBox ipContainer = new VBox(5, ipLabel, ipValue);
+                    ipContainer.setAlignment(Pos.CENTER);
+
+                    VBox center = (VBox) root.getCenter();
+                    center.getChildren().set(0, title);
+                    center.getChildren().addAll(imageView, ipContainer);
+                });
+            }
+
+
+            @Override
+            protected void failed() {
+                Platform.runLater(() -> {
+                    statusLabel.setText("Failed to start services");
+                    statusLabel.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
+                            "-fx-font-size: 14px; " +
+                            "-fx-text-fill: #dc3545;");
+                    progressIndicator.setVisible(false);
+                    backButton.setDisable(false);
+                });
+                getException().printStackTrace();
+            }
+        };
+
+        executor.submit(startupTask);
     }
-    //liux - windows - empty
-    //linux - wind10 - ok
-
 
     public void stopServices() {
-        try {
-            if (httpServer != null) httpServer.stop();
-            if (networkService != null) networkService.stop();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        Task<Void> shutdownTask = new Task<Void>() {
+            @Override
+            protected Void call() throws Exception {
+                Platform.runLater(() -> {
+                    statusLabel.setText("Stopping services...");
+                    statusLabel.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
+                            "-fx-font-size: 14px; " +
+                            "-fx-text-fill: #6c757d;");
+                    progressIndicator.setVisible(true);
+                    backButton.setDisable(true);
+                });
+
+                if (httpServer != null) httpServer.stop();
+                if (networkService != null) networkService.stop();
+
+                return null;
+            }
+
+            @Override
+            protected void succeeded() {
+                Platform.runLater(() -> {
+                    if (executor != null) {
+                        executor.shutdown();
+                    }
+                });
+            }
+        };
+
+        executor.submit(shutdownTask);
     }
 
     public BorderPane getRoot() {

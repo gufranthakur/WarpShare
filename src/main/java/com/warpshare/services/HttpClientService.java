@@ -29,8 +29,7 @@ public class HttpClientService {
         }
     }
 
-    public void sendSingleFile(CloseableHttpClient httpClient, File file, String targetHost, int targetPort)
-            throws IOException {
+    public void sendSingleFile(CloseableHttpClient httpClient, File file, String targetHost, int targetPort) {
         String url = "http://" + targetHost + ":" + targetPort + "/upload";
         System.out.println("Sending file to: " + url);
         System.out.println("File: " + file.getAbsolutePath());
