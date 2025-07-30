@@ -76,9 +76,9 @@ public class SearchReceiverPanel {
         refreshButton = new Button("Refresh");
         refreshButton.setOnAction(e -> refreshDevices());
 
-        TextField ipField = new TextField();
-        ipField.setPromptText("Enter IP address (e.g., 192.168.1.100)");
-        TextField portField = new TextField("8080");
+        TextField ipField = new TextField("192.168.");
+        ipField.setPromptText("Enter IP address");
+        TextField portField = new TextField("8443");
         portField.setPromptText("Port");
         Button connectButton = new Button("Connect Manually");
 
