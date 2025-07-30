@@ -1,25 +1,19 @@
 package com.warpshare.services;
 
-
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpsServer;
+import com.sun.net.httpserver.HttpServer;
 import javafx.application.Platform;
 import javafx.collections.ObservableList;
 
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
 import java.io.*;
 import java.net.InetSocketAddress;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.KeyStore;
 import java.util.function.Consumer;
 
 public class HttpServerService {
-    public HttpsServer server;
+    public HttpServer server; // Changed from HttpsServer to HttpServer
     public ObservableList<String> receivedFiles;
     public Consumer<Double> progressCallback;
 
@@ -27,21 +21,16 @@ public class HttpServerService {
         this.receivedFiles = receivedFiles;
         this.progressCallback = progressCallback;
 
-        server = HttpsServer.create(new InetSocketAddress(port), 0);
+        // Changed from HttpsServer to HttpServer
+        server = HttpServer.create(new InetSocketAddress(port), 0);
 
-        SSLContext sslContext = createSSLContext();
-        server.setHttpsConfigurator(new com.sun.net.httpserver.HttpsConfigurator(sslContext));
-
+        // Removed SSL configuration entirely
         server.createContext("/upload", new FileUploadHandler());
         server.setExecutor(null);
         server.start();
     }
 
-    public SSLContext createSSLContext() throws Exception {
-        SSLContext sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(null, null, null);
-        return sslContext;
-    }
+    // Removed createSSLContext method entirely
 
     public class FileUploadHandler implements HttpHandler {
         public void handle(HttpExchange exchange) throws IOException {
