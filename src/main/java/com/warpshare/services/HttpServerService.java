@@ -13,7 +13,7 @@ import java.nio.file.Paths;
 import java.util.function.Consumer;
 
 public class HttpServerService {
-    public HttpServer server; // Changed from HttpsServer to HttpServer
+    public HttpServer server;
     public ObservableList<String> receivedFiles;
     public Consumer<Double> progressCallback;
 
@@ -21,105 +21,133 @@ public class HttpServerService {
         this.receivedFiles = receivedFiles;
         this.progressCallback = progressCallback;
 
-        // Changed from HttpsServer to HttpServer
         server = HttpServer.create(new InetSocketAddress(port), 0);
-
-        // Removed SSL configuration entirely
         server.createContext("/upload", new FileUploadHandler());
         server.setExecutor(null);
         server.start();
+        System.out.println("HTTP server started on port " + port);
     }
 
-    // Removed createSSLContext method entirely
-
     public class FileUploadHandler implements HttpHandler {
-        private String fileName;
-
         public void handle(HttpExchange exchange) throws IOException {
             if ("POST".equals(exchange.getRequestMethod())) {
                 handleFileUpload(exchange);
             } else {
                 exchange.sendResponseHeaders(405, -1);
+                System.out.println("Method not allowed: " + exchange.getRequestMethod());
             }
         }
 
         public void handleFileUpload(HttpExchange exchange) throws IOException {
+            System.out.println("Receiving file upload request");
+
             InputStream inputStream = exchange.getRequestBody();
 
-            // Extract filename from Content-Disposition header
-            String contentDisposition = exchange.getRequestHeaders().getFirst("Content-Disposition");
-            fileName = "received_file_" + System.currentTimeMillis(); // fallback
-
-            if (contentDisposition != null && contentDisposition.contains("filename=")) {
-                int start = contentDisposition.indexOf("filename=") + 9;
-                int end = contentDisposition.indexOf(";", start);
-                if (end == -1) end = contentDisposition.length();
-                fileName = contentDisposition.substring(start, end).replace("\"", "").trim();
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            byte[] data = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(data)) != -1) {
+                buffer.write(data, 0, bytesRead);
             }
+            byte[] fullContent = buffer.toByteArray();
+            System.out.println("Read " + fullContent.length + " bytes from request");
 
-            // Alternative: Parse multipart data properly
-            // For now, let's use a simpler approach - extract from multipart boundary
-            String boundary = null;
-            String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
-            if (contentType != null && contentType.contains("boundary=")) {
-                boundary = contentType.substring(contentType.indexOf("boundary=") + 9);
-            }
+            String boundary = getBoundary(exchange);
+            MultipartResult result = parseMultipartContent(fullContent, boundary);
 
-            if (boundary != null) {
-                fileName = parseMultipartFilename(inputStream, boundary);
-            }
+            System.out.println("Extracted filename: " + result.filename);
+            System.out.println("File content size: " + result.content.length + " bytes");
 
-            Path filePath = Paths.get(System.getProperty("user.home"), "Downloads", fileName);
+            Path filePath = Paths.get(System.getProperty("user.home"), "Downloads", result.filename);
 
             try (FileOutputStream fos = new FileOutputStream(filePath.toFile())) {
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                long totalBytes = 0;
-
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    fos.write(buffer, 0, bytesRead);
-                    totalBytes += bytesRead;
-
-                    double progress = Math.min(1.0, totalBytes / 1000000.0);
-                    Platform.runLater(() -> progressCallback.accept(progress));
-                }
+                fos.write(result.content);
+                System.out.println("File saved to: " + filePath.toString());
             }
 
-            Platform.runLater(() -> receivedFiles.add(fileName));
+            Platform.runLater(() -> {
+                receivedFiles.add(result.filename);
+                progressCallback.accept(1.0);
+            });
 
             String response = "File uploaded successfully";
             exchange.sendResponseHeaders(200, response.length());
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(response.getBytes());
             }
+            System.out.println("Upload completed successfully");
         }
 
-        private String parseMultipartFilename(InputStream inputStream, String boundary) {
-            // Simple multipart parsing to extract filename
-            try {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.contains("Content-Disposition") && line.contains("filename=")) {
-                        int start = line.indexOf("filename=") + 10; // +10 for 'filename="'
-                        int end = line.lastIndexOf("\"");
-                        if (start < end) {
-                            return line.substring(start, end);
-                        }
-                    }
-                    if (line.trim().isEmpty()) break; // End of headers
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
+        private String getBoundary(HttpExchange exchange) {
+            String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+            if (contentType != null && contentType.contains("boundary=")) {
+                String boundary = contentType.substring(contentType.indexOf("boundary=") + 9);
+                System.out.println("Found boundary: " + boundary);
+                return boundary;
             }
-            return "received_file_" + System.currentTimeMillis();
+            System.out.println("No boundary found in Content-Type");
+            return null;
         }
 
+        private static class MultipartResult {
+            String filename;
+            byte[] content;
 
+            MultipartResult(String filename, byte[] content) {
+                this.filename = filename;
+                this.content = content;
+            }
+        }
+
+        private MultipartResult parseMultipartContent(byte[] data, String boundary) {
+            if (boundary == null) {
+                System.out.println("No boundary provided, using raw data");
+                return new MultipartResult("received_file_" + System.currentTimeMillis(), data);
+            }
+
+            String dataStr = new String(data);
+            String boundaryStr = "--" + boundary;
+
+            int start = dataStr.indexOf(boundaryStr);
+            if (start == -1) {
+                System.out.println("Boundary not found in data, using raw data");
+                return new MultipartResult("received_file_" + System.currentTimeMillis(), data);
+            }
+
+            int headerEnd = dataStr.indexOf("\r\n\r\n", start);
+            if (headerEnd == -1) {
+                System.out.println("Header end not found, using raw data");
+                return new MultipartResult("received_file_" + System.currentTimeMillis(), data);
+            }
+
+            String headers = dataStr.substring(start, headerEnd);
+            String fileName = "received_file_" + System.currentTimeMillis();
+
+            if (headers.contains("filename=")) {
+                int fnStart = headers.indexOf("filename=\"") + 10;
+                int fnEnd = headers.indexOf("\"", fnStart);
+                if (fnStart < fnEnd && fnStart > 9) {
+                    fileName = headers.substring(fnStart, fnEnd);
+                    System.out.println("Parsed filename from headers: " + fileName);
+                }
+            }
+
+            int contentStart = headerEnd + 4;
+            int contentEnd = dataStr.lastIndexOf("\r\n--" + boundary);
+            if (contentEnd == -1) contentEnd = data.length;
+
+            byte[] fileContent = new byte[contentEnd - contentStart];
+            System.arraycopy(data, contentStart, fileContent, 0, contentEnd - contentStart);
+
+            System.out.println("Multipart parsing complete - filename: " + fileName + ", content size: " + fileContent.length);
+            return new MultipartResult(fileName, fileContent);
+        }
     }
+
     public void stop() {
         if (server != null) {
             server.stop(0);
+            System.out.println("HTTP server stopped");
         }
     }
 }
