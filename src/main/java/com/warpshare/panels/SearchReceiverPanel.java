@@ -11,10 +11,19 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
+import javax.jmdns.JmDNS;
+import javax.jmdns.ServiceEvent;
 import javax.jmdns.ServiceInfo;
+import javax.jmdns.ServiceListener;
+import java.io.IOException;
+import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
+import static com.warpshare.services.NetworkService.SERVICE_TYPE;
 
 public class SearchReceiverPanel {
     public WarpShare app;
@@ -22,6 +31,7 @@ public class SearchReceiverPanel {
     public ObservableList<String> receivers;
     public NetworkService networkService;
     public Map<String, ServiceInfo> serviceMap;
+    private JmDNS jmdns;
 
     public SearchReceiverPanel(WarpShare app) {
         this.app = app;
@@ -74,6 +84,9 @@ public class SearchReceiverPanel {
 
         backButton.setOnAction(e -> {
             try {
+                if (jmdns != null) {
+                    jmdns.close();
+                }
                 networkService.stop();
             } catch (Exception ex) {
                 ex.printStackTrace();
@@ -95,16 +108,39 @@ public class SearchReceiverPanel {
 
     public void startDiscovery() {
         try {
-            networkService.startDiscovery(serviceInfo -> {
-                Platform.runLater(() -> {
-                    String deviceName = serviceInfo.getName();
-                    if (!receivers.contains(deviceName)) {
-                        receivers.add(deviceName);
-                        serviceMap.put(deviceName, serviceInfo);
+            ServiceListener listener = new ServiceListener() {
+                public void serviceAdded(ServiceEvent event) {
+                    jmdns.requestServiceInfo(event.getType(), event.getName(), 5000);
+                }
+                public void serviceRemoved(ServiceEvent event) {
+                    Platform.runLater(() -> {
+                        String serviceName = event.getName();
+                        receivers.remove(serviceName);
+                        serviceMap.remove(serviceName);
+                    });
+                }
+                public void serviceResolved(ServiceEvent event) {
+                    Platform.runLater(() -> {
+                        String serviceName = event.getName();
+                        receivers.add(serviceName);
+                        serviceMap.put(serviceName, event.getInfo());
+                    });
+                }
+            };
+
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!ni.isLoopback() && ni.isUp() && !ni.isVirtual()) {
+                    for (InetAddress addr : Collections.list(ni.getInetAddresses())) {
+                        if (addr instanceof Inet4Address && !addr.isLoopbackAddress()) {
+                            jmdns = JmDNS.create(addr);
+                            jmdns.addServiceListener(SERVICE_TYPE, listener);
+                            break;
+                        }
                     }
-                });
-            });
-        } catch (Exception e) {
+                    if (jmdns != null) break;
+                }
+            }
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
