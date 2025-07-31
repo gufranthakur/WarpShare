@@ -110,20 +110,12 @@ public class SearchReceiverPanel {
         TextField portField = new TextField("8443");
         portField.setPromptText("Port");
         portField.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
-                "-fx-font-size: 14px; " +
-                "-fx-background-radius: 6; " +
-                "-fx-border-radius: 6; " +
-                "-fx-padding: 8; " +
-                "-fx-pref-width: 80;");
+                "-fx-font-size: 14px; ");
 
         Button connectButton = new Button("Connect Manually");
         connectButton.setStyle("-fx-background-color: #007bff; " +
                 "-fx-text-fill: white; " +
-                "-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
-                "-fx-font-size: 14px; " +
-                "-fx-background-radius: 6; " +
-                "-fx-cursor: hand; " +
-                "-fx-padding: 8 16 8 16;");
+                "-fx-font-family: 'Segoe UI', Arial, sans-serif; ");
 
         connectButton.setOnAction(e -> {
             String ip = ipField.getText().trim();
@@ -163,11 +155,7 @@ public class SearchReceiverPanel {
         backButton.setStyle("-fx-background-color: #6c757d; " +
                 "-fx-text-fill: white; " +
                 "-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
-                "-fx-font-size: 14px; " +
-                "-fx-background-radius: 8; " +
-                "-fx-cursor: hand; " +
-                "-fx-padding: 12 24 12 24; " +
-                "-fx-pref-width: 100;");
+                "-fx-font-size: 14px; ");
 
         deviceListView.setOnMouseClicked(e -> {
             DeviceInfo selected = deviceListView.getSelectionModel().getSelectedItem();
@@ -188,7 +176,7 @@ public class SearchReceiverPanel {
         });
 
         HBox topSection = new HBox(15);
-        topSection.setAlignment(Pos.CENTER_LEFT);
+        topSection.setAlignment(Pos.CENTER);
         topSection.setPadding(new Insets(0, 0, 10, 0));
         topSection.getChildren().addAll(statusLabel, progressIndicator, refreshButton);
 
@@ -302,7 +290,7 @@ public class SearchReceiverPanel {
 
         Platform.runLater(() -> devices.clear());
 
-        Task<Void> refreshTask = new Task<Void>() {
+        Task<Void> refreshTask = new Task<>() {
             @Override
             protected Void call() throws Exception {
                 scanNetwork(currentDevices);

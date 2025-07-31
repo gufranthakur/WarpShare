@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import javafx.application.Platform;
 import javafx.collections.ObservableList;
+import javafx.scene.control.Alert;
 
 import java.io.*;
 import java.net.InetSocketAddress;
@@ -25,7 +26,8 @@ public class HttpServerService {
         server.createContext("/upload", new FileUploadHandler());
         server.setExecutor(null);
         server.start();
-        System.out.println("HTTP server started on port " + port);
+
+        showInfo("HTTP server started on port " + port);
     }
 
     public class FileUploadHandler implements HttpHandler {
@@ -34,15 +36,14 @@ public class HttpServerService {
                 handleFileUpload(exchange);
             } else {
                 exchange.sendResponseHeaders(405, -1);
-                System.out.println("Method not allowed: " + exchange.getRequestMethod());
+                showError("Method not allowed: " + exchange.getRequestMethod());
             }
         }
 
         public void handleFileUpload(HttpExchange exchange) throws IOException {
-            System.out.println("Receiving file upload request");
+            showInfo("Receiving file upload request");
 
             InputStream inputStream = exchange.getRequestBody();
-
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             byte[] data = new byte[8192];
             int bytesRead;
@@ -50,19 +51,20 @@ public class HttpServerService {
                 buffer.write(data, 0, bytesRead);
             }
             byte[] fullContent = buffer.toByteArray();
-            System.out.println("Read " + fullContent.length + " bytes from request");
+
+            showInfo("Read " + fullContent.length + " bytes from request");
 
             String boundary = getBoundary(exchange);
             MultipartResult result = parseMultipartContent(fullContent, boundary);
 
-            System.out.println("Extracted filename: " + result.filename);
-            System.out.println("File content size: " + result.content.length + " bytes");
+            showInfo("Extracted filename: " + result.filename);
+            showInfo("File content size: " + result.content.length + " bytes");
 
             Path filePath = Paths.get(System.getProperty("user.home"), "Downloads", result.filename);
 
             try (FileOutputStream fos = new FileOutputStream(filePath.toFile())) {
                 fos.write(result.content);
-                System.out.println("File saved to: " + filePath);
+                showInfo("File saved to: " + filePath);
             }
 
             Platform.runLater(() -> {
@@ -75,21 +77,22 @@ public class HttpServerService {
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(response.getBytes());
             }
-            System.out.println("Upload completed successfully");
+
+            showInfo("Upload completed successfully");
         }
 
         private String getBoundary(HttpExchange exchange) {
             String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
             if (contentType != null && contentType.contains("boundary=")) {
                 String boundary = contentType.substring(contentType.indexOf("boundary=") + 9);
-                System.out.println("Found boundary: " + boundary);
+                showInfo("Found boundary: " + boundary);
                 return boundary;
             }
-            System.out.println("No boundary found in Content-Type");
+            showError("No boundary found in Content-Type");
             return null;
         }
 
-        private static class MultipartResult {
+        private class MultipartResult {
             String filename;
             byte[] content;
 
@@ -101,7 +104,7 @@ public class HttpServerService {
 
         private MultipartResult parseMultipartContent(byte[] data, String boundary) {
             if (boundary == null) {
-                System.out.println("No boundary provided, using raw data");
+                showError("No boundary provided, using raw data");
                 return new MultipartResult("received_file_" + System.currentTimeMillis(), data);
             }
 
@@ -110,13 +113,13 @@ public class HttpServerService {
 
             int start = dataStr.indexOf(boundaryStr);
             if (start == -1) {
-                System.out.println("Boundary not found in data, using raw data");
+                showError("Boundary not found in data, using raw data");
                 return new MultipartResult("received_file_" + System.currentTimeMillis(), data);
             }
 
             int headerEnd = dataStr.indexOf("\r\n\r\n", start);
             if (headerEnd == -1) {
-                System.out.println("Header end not found, using raw data");
+                showError("Header end not found, using raw data");
                 return new MultipartResult("received_file_" + System.currentTimeMillis(), data);
             }
 
@@ -128,7 +131,7 @@ public class HttpServerService {
                 int fnEnd = headers.indexOf("\"", fnStart);
                 if (fnStart < fnEnd && fnStart > 9) {
                     fileName = headers.substring(fnStart, fnEnd);
-                    System.out.println("Parsed filename from headers: " + fileName);
+                    showInfo("Parsed filename from headers: " + fileName);
                 }
             }
 
@@ -139,7 +142,7 @@ public class HttpServerService {
             byte[] fileContent = new byte[contentEnd - contentStart];
             System.arraycopy(data, contentStart, fileContent, 0, contentEnd - contentStart);
 
-            System.out.println("Multipart parsing complete - filename: " + fileName + ", content size: " + fileContent.length);
+            showInfo("Multipart parsing complete - filename: " + fileName + ", content size: " + fileContent.length);
             return new MultipartResult(fileName, fileContent);
         }
     }
@@ -147,7 +150,27 @@ public class HttpServerService {
     public void stop() {
         if (server != null) {
             server.stop(0);
-            System.out.println("HTTP server stopped");
+            showInfo("HTTP server stopped");
         }
+    }
+
+    private void showInfo(String message) {
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("WarpShare Info");
+            alert.setHeaderText(null);
+            alert.setContentText(message);
+            alert.show();
+        });
+    }
+
+    private void showError(String message) {
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("WarpShare Error");
+            alert.setHeaderText(null);
+            alert.setContentText(message);
+            alert.show();
+        });
     }
 }

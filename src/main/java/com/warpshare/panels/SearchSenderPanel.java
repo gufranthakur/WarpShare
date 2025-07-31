@@ -157,23 +157,57 @@ public class SearchSenderPanel {
                     imageView.setFitHeight(100);
                     imageView.setPreserveRatio(true);
 
-                    // Fetch IP Address
+                    // Replace the IP address detection section in your succeeded() method with this:
+
+// Fetch IP Address - prioritize WiFi adapters
                     String ipAddress = "Unavailable";
                     try {
                         Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+                        String fallbackIP = null;
+
                         while (interfaces.hasMoreElements()) {
                             NetworkInterface iface = interfaces.nextElement();
                             if (iface.isLoopback() || !iface.isUp()) continue;
+
+                            String ifaceName = iface.getName().toLowerCase();
+                            String displayName = iface.getDisplayName().toLowerCase();
+
+                            // Check if this is a WiFi/wireless adapter
+                            boolean isWiFi = ifaceName.contains("wlan") ||
+                                    ifaceName.contains("wifi") ||
+                                    ifaceName.contains("wl") ||
+                                    displayName.contains("wireless") ||
+                                    displayName.contains("wifi") ||
+                                    displayName.contains("wi-fi") ||
+                                    displayName.contains("lan");
+
                             Enumeration<InetAddress> addresses = iface.getInetAddresses();
                             while (addresses.hasMoreElements()) {
                                 InetAddress addr = addresses.nextElement();
                                 if (!addr.isLoopbackAddress() && addr.getHostAddress().indexOf(':') == -1) {
-                                    ipAddress = addr.getHostAddress();
-                                    break;
+                                    String currentIP = addr.getHostAddress();
+
+                                    if (isWiFi) {
+                                        // Prioritize WiFi adapters
+                                        ipAddress = currentIP;
+                                        break;
+                                    } else if (fallbackIP == null) {
+                                        // Keep first valid IP as fallback
+                                        fallbackIP = currentIP;
+                                    }
                                 }
                             }
-                            if (!ipAddress.equals("Unavailable")) break;
+
+                            if (isWiFi && !ipAddress.equals("Unavailable")) {
+                                break; // Found WiFi IP, stop searching
+                            }
                         }
+
+                        // Use fallback if no WiFi adapter found
+                        if (ipAddress.equals("Unavailable") && fallbackIP != null) {
+                            ipAddress = fallbackIP;
+                        }
+
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
