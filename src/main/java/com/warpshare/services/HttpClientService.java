@@ -14,27 +14,37 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 public class HttpClientService {
 
     public void sendFiles(List<File> files, String targetHost, int targetPort, Consumer<Double> progressCallback) {
-        try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
-            // Expand directories to individual files
-            List<File> allFiles = expandDirectories(files);
+        List<File> allFiles = expandDirectories(files);
+        AtomicInteger completed = new AtomicInteger(0);
+        int totalFiles = allFiles.size();
 
-            for (int i = 0; i < allFiles.size(); i++) {
-                File file = allFiles.get(i);
-                String relativePath = getRelativePath(file, files);
-                sendSingleFile(httpClient, file, targetHost, targetPort, relativePath);
+        // Create CompletableFuture for each file
+        CompletableFuture<Void>[] futures = allFiles.stream()
+                .map(file -> CompletableFuture.runAsync(() -> {
+                    try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
+                        String relativePath = getRelativePath(file, files);
+                        sendSingleFile(httpClient, file, targetHost, targetPort, relativePath);
 
-                double progress = (double) (i + 1) / allFiles.size();
-                progressCallback.accept(progress);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+                        // Update progress
+                        int count = completed.incrementAndGet();
+                        double progress = (double) count / totalFiles;
+                        progressCallback.accept(progress);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }))
+                .toArray(CompletableFuture[]::new);
+
+        // Wait for all transfers to complete
+        CompletableFuture.allOf(futures).join();
     }
 
     private List<File> expandDirectories(List<File> files) {
