@@ -79,7 +79,9 @@ public class HttpServerService {
 
             Platform.runLater(() -> {
                 receivedFiles.add(pathToUse);
-                progressCallback.accept(1.0);
+                if (progressCallback != null) {
+                    progressCallback.accept(1.0);
+                }
             });
 
             String response = "File uploaded successfully";
