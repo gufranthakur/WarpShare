@@ -322,6 +322,7 @@ public class SearchReceiverPanel {
             protected void succeeded() {
                 Platform.runLater(() -> {
                     statusLabel.setText("Scan complete. Found " + devices.size() + " devices.");
+                    progressIndicator.setVisible(false); // Add this line
                 });
             }
         };
