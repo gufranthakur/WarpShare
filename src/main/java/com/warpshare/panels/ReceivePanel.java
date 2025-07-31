@@ -22,7 +22,7 @@ public class ReceivePanel {
     public BorderPane root;
     public ObservableList<String> receivedFiles;
     public HttpServerService httpServer;
-    private Label statusLabel;
+    private static Label statusLabel;
 
     public ReceivePanel(WarpShare app, String senderName, ObservableList<String> receivedFiles, HttpServerService httpServer) {
         this.app = app;
@@ -65,7 +65,7 @@ public class ReceivePanel {
         headerSection.getChildren().addAll(titleLabel, senderLabel);
 
         // Status message
-        statusLabel = new Label("Waiting for files...");
+        statusLabel = new Label("📥 Waiting for files...");
         statusLabel.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
                 "-fx-font-size: 14px; " +
                 "-fx-text-fill: #007bff; " +
@@ -73,7 +73,7 @@ public class ReceivePanel {
                 "-fx-background-color: rgba(0, 123, 255, 0.1); " +
                 "-fx-background-radius: 6; " +
                 "-fx-border-radius: 6;");
-        statusLabel.setVisible(false);
+        statusLabel.setVisible(true);
 
         // Files list
         Label filesLabel = new Label("Received Files:");
@@ -90,21 +90,6 @@ public class ReceivePanel {
                 "-fx-background-color: white;");
         fileList.setPrefHeight(300);
 
-        // Listen for new files to show success message
-        receivedFiles.addListener((javafx.collections.ListChangeListener<String>) change -> {
-            Platform.runLater(() -> {
-                statusLabel.setText("✓ File received successfully!");
-                statusLabel.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
-                        "-fx-font-size: 14px; " +
-                        "-fx-text-fill: #28a745; " +
-                        "-fx-padding: 10; " +
-                        "-fx-background-color: rgba(40, 167, 69, 0.1); " +
-                        "-fx-background-radius: 6; " +
-                        "-fx-border-radius: 6;");
-                statusLabel.setVisible(true);
-            });
-        });
-
         VBox center = new VBox(15);
         center.setAlignment(Pos.TOP_CENTER);
         center.setPadding(new Insets(10, 30, 20, 30));
@@ -115,25 +100,14 @@ public class ReceivePanel {
         bottomSection.setAlignment(Pos.CENTER);
         bottomSection.setPadding(new Insets(15, 0, 25, 0));
 
-        Button backButton = new Button("  Back to Home");
-
-        // Add back icon
-        try {
-            Image backIcon = new Image(getClass().getResourceAsStream("/back.png"));
-            ImageView backIconView = new ImageView(backIcon);
-            backIconView.setFitHeight(16);
-            backIconView.setFitWidth(16);
-            backButton.setGraphic(backIconView);
-        } catch (Exception e) {
-            backButton.setText("← Back to Home");
-        }
+        Button backButton = new Button("Back to Home");
 
         backButton.setStyle("-fx-background-color: #037bfc; " +
                 "-fx-text-fill: white; " +
                 "-fx-font-size: 14px; " +
-                "-fx-font-weight: 600; " +
+                "-fx-background-radius: 8; " +
+                "-fx-border-radius: 8; " +
                 "-fx-pref-width: 160;");
-
 
         backButton.setOnAction(e -> {
             if (httpServer != null) httpServer.stop();
@@ -145,6 +119,21 @@ public class ReceivePanel {
         root.setTop(headerSection);
         root.setCenter(center);
         root.setBottom(bottomSection);
+    }
+
+    public static void notifyReceiver() {
+        Platform.runLater(() -> {
+            statusLabel.setText("✓ File received successfully!");
+            statusLabel.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; " +
+                    "-fx-font-size: 14px; " +
+                    "-fx-text-fill: #28a745; " +
+                    "-fx-padding: 10; " +
+                    "-fx-background-color: rgba(40, 167, 69, 0.1); " +
+                    "-fx-background-radius: 6; " +
+                    "-fx-border-radius: 6;");
+            statusLabel.setVisible(true);
+        });
+
     }
 
     public BorderPane getRoot() {

@@ -52,7 +52,7 @@ public class SendPanel {
 
         // Sender icon
         try {
-            Image senderIcon = new Image(getClass().getResourceAsStream("/sender.png"));
+            Image senderIcon = new Image(getClass().getResourceAsStream("/receiver.png"));
             ImageView iconView = new ImageView(senderIcon);
             iconView.setFitHeight(64);
             iconView.setPreserveRatio(true);

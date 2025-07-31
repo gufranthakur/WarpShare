@@ -13,6 +13,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.function.Consumer;
 
+import static com.warpshare.panels.ReceivePanel.notifyReceiver;
+
 public class HttpServerService {
     public HttpServer server;
     public ObservableList<String> receivedFiles;
@@ -91,6 +93,7 @@ public class HttpServerService {
             }
 
             System.out.println("[INFO] Upload completed successfully");
+            notifyReceiver();
         }
 
         private String getBoundary(HttpExchange exchange) {
