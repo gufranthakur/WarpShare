@@ -8,6 +8,7 @@ import javafx.collections.ObservableList;
 
 import java.io.*;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.function.Consumer;
@@ -57,9 +58,19 @@ public class HttpServerService {
             MultipartResult result = parseMultipartContent(fullContent, boundary);
 
             System.out.println("[INFO] Extracted filename: " + result.filename);
+            System.out.println("[INFO] Relative path: " + result.relativePath);
             System.out.println("[INFO] File content size: " + result.content.length + " bytes");
 
-            Path filePath = Paths.get(System.getProperty("user.home"), "Downloads", result.filename);
+            // Use relative path if provided, otherwise use filename
+            String pathToUse = result.relativePath != null ? result.relativePath : result.filename;
+            Path filePath = Paths.get(System.getProperty("user.home"), "Downloads", pathToUse);
+
+            // Create parent directories if they don't exist
+            try {
+                Files.createDirectories(filePath.getParent());
+            } catch (IOException e) {
+                System.err.println("[ERROR] Failed to create directories: " + e.getMessage());
+            }
 
             try (FileOutputStream fos = new FileOutputStream(filePath.toFile())) {
                 fos.write(result.content);
@@ -67,7 +78,7 @@ public class HttpServerService {
             }
 
             Platform.runLater(() -> {
-                receivedFiles.add(result.filename);
+                receivedFiles.add(pathToUse);
                 progressCallback.accept(1.0);
             });
 
@@ -93,10 +104,12 @@ public class HttpServerService {
 
         private class MultipartResult {
             String filename;
+            String relativePath;
             byte[] content;
 
-            MultipartResult(String filename, byte[] content) {
+            MultipartResult(String filename, String relativePath, byte[] content) {
                 this.filename = filename;
+                this.relativePath = relativePath;
                 this.content = content;
             }
         }
@@ -104,45 +117,61 @@ public class HttpServerService {
         private MultipartResult parseMultipartContent(byte[] data, String boundary) {
             if (boundary == null) {
                 System.out.println("[ERROR] No boundary provided, using raw data");
-                return new MultipartResult("received_file_" + System.currentTimeMillis(), data);
+                return new MultipartResult("received_file_" + System.currentTimeMillis(), null, data);
             }
 
             String dataStr = new String(data);
             String boundaryStr = "--" + boundary;
 
-            int start = dataStr.indexOf(boundaryStr);
-            if (start == -1) {
-                System.out.println("[ERROR] Boundary not found in data, using raw data");
-                return new MultipartResult("received_file_" + System.currentTimeMillis(), data);
-            }
-
-            int headerEnd = dataStr.indexOf("\r\n\r\n", start);
-            if (headerEnd == -1) {
-                System.out.println("[ERROR] Header end not found, using raw data");
-                return new MultipartResult("received_file_" + System.currentTimeMillis(), data);
-            }
-
-            String headers = dataStr.substring(start, headerEnd);
+            String[] parts = dataStr.split(boundaryStr);
             String fileName = "received_file_" + System.currentTimeMillis();
+            String relativePath = null;
+            byte[] fileContent = null;
 
-            if (headers.contains("filename=")) {
-                int fnStart = headers.indexOf("filename=\"") + 10;
-                int fnEnd = headers.indexOf("\"", fnStart);
-                if (fnStart < fnEnd && fnStart > 9) {
-                    fileName = headers.substring(fnStart, fnEnd);
-                    System.out.println("[INFO] Parsed filename from headers: " + fileName);
+            for (String part : parts) {
+                if (part.trim().isEmpty() || part.startsWith("--")) continue;
+
+                int headerEnd = part.indexOf("\r\n\r\n");
+                if (headerEnd == -1) continue;
+
+                String headers = part.substring(0, headerEnd);
+                String content = part.substring(headerEnd + 4);
+
+                // Remove trailing boundary markers
+                if (content.endsWith("\r\n")) {
+                    content = content.substring(0, content.length() - 2);
+                }
+
+                if (headers.contains("name=\"file\"")) {
+                    // This is the file content
+                    if (headers.contains("filename=")) {
+                        int fnStart = headers.indexOf("filename=\"") + 10;
+                        int fnEnd = headers.indexOf("\"", fnStart);
+                        if (fnStart < fnEnd && fnStart > 9) {
+                            fileName = headers.substring(fnStart, fnEnd);
+                            System.out.println("[INFO] Parsed filename from headers: " + fileName);
+                        }
+                    }
+                    try {
+                        fileContent = content.getBytes("ISO-8859-1"); // Preserve binary data
+                    } catch (UnsupportedEncodingException e) {
+                        throw new RuntimeException(e);
+                    }
+                } else if (headers.contains("name=\"relativePath\"")) {
+                    // This is the relative path
+                    relativePath = content.trim();
+                    System.out.println("[INFO] Parsed relative path: " + relativePath);
                 }
             }
 
-            int contentStart = headerEnd + 4;
-            int contentEnd = dataStr.lastIndexOf("\r\n--" + boundary);
-            if (contentEnd == -1) contentEnd = data.length;
+            if (fileContent == null) {
+                System.out.println("[ERROR] No file content found, using raw data");
+                fileContent = data;
+            }
 
-            byte[] fileContent = new byte[contentEnd - contentStart];
-            System.arraycopy(data, contentStart, fileContent, 0, contentEnd - contentStart);
-
-            System.out.println("[INFO] Multipart parsing complete - filename: " + fileName + ", content size: " + fileContent.length);
-            return new MultipartResult(fileName, fileContent);
+            System.out.println("[INFO] Multipart parsing complete - filename: " + fileName +
+                    ", relativePath: " + relativePath + ", content size: " + fileContent.length);
+            return new MultipartResult(fileName, relativePath, fileContent);
         }
     }
 

@@ -13,6 +13,7 @@ import javafx.scene.control.ProgressBar;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 
 import javax.jmdns.ServiceInfo;
@@ -47,6 +48,7 @@ public class SendPanel {
         ListView<File> fileList = new ListView<>(selectedFiles);
 
         Button selectFilesButton = new Button("Select Files");
+        Button selectFolderButton = new Button("Select Folders");
         Button sendButton = new Button("Send");
 
         progressBar = new ProgressBar(0.0);
@@ -55,14 +57,19 @@ public class SendPanel {
         Button backButton = new Button("Back");
 
         selectFilesButton.setOnAction(e -> selectFiles());
+        selectFolderButton.setOnAction(e -> selectFolders());
         sendButton.setOnAction(e -> sendFiles());
         backButton.setOnAction(e -> app.showSearchReceiverPanel());
+
+        HBox selectionButtons = new HBox(10);
+        selectionButtons.setAlignment(Pos.CENTER);
+        selectionButtons.getChildren().addAll(selectFilesButton, selectFolderButton);
 
         VBox center = new VBox(15);
         center.setAlignment(Pos.CENTER);
         center.setSpacing(15);
         center.setStyle("-fx-padding: 30;");
-        center.getChildren().addAll(fileList, selectFilesButton, sendButton);
+        center.getChildren().addAll(fileList, selectionButtons, sendButton);
 
         HBox bottom = new HBox(15);
         bottom.setAlignment(Pos.CENTER);
@@ -81,6 +88,15 @@ public class SendPanel {
         List<File> files = fileChooser.showOpenMultipleDialog(app.primaryStage);
         if (files != null) {
             selectedFiles.addAll(files);
+        }
+    }
+
+    public void selectFolders() {
+        DirectoryChooser directoryChooser = new DirectoryChooser();
+        directoryChooser.setTitle("Select Folder to Send");
+        File folder = directoryChooser.showDialog(app.primaryStage);
+        if (folder != null) {
+            selectedFiles.add(folder);
         }
     }
 
