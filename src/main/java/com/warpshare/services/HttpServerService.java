@@ -120,48 +120,62 @@ public class HttpServerService {
                 return new MultipartResult("received_file_" + System.currentTimeMillis(), null, data);
             }
 
-            String dataStr = new String(data);
-            String boundaryStr = "--" + boundary;
-
-            String[] parts = dataStr.split(boundaryStr);
+            byte[] boundaryBytes = ("--" + boundary).getBytes();
             String fileName = "received_file_" + System.currentTimeMillis();
             String relativePath = null;
             byte[] fileContent = null;
 
-            for (String part : parts) {
-                if (part.trim().isEmpty() || part.startsWith("--")) continue;
+            int pos = 0;
+            while (pos < data.length) {
+                // Find next boundary
+                int boundaryStart = findBytes(data, boundaryBytes, pos);
+                if (boundaryStart == -1) break;
 
-                int headerEnd = part.indexOf("\r\n\r\n");
-                if (headerEnd == -1) continue;
+                // Find end of this part
+                int nextBoundaryStart = findBytes(data, boundaryBytes, boundaryStart + boundaryBytes.length);
+                if (nextBoundaryStart == -1) nextBoundaryStart = data.length;
 
-                String headers = part.substring(0, headerEnd);
-                String content = part.substring(headerEnd + 4);
+                // Extract headers (text portion)
+                int headerStart = boundaryStart + boundaryBytes.length;
+                while (headerStart < data.length && (data[headerStart] == '\r' || data[headerStart] == '\n')) {
+                    headerStart++;
+                }
 
-                // Remove trailing boundary markers
-                if (content.endsWith("\r\n")) {
-                    content = content.substring(0, content.length() - 2);
+                int headerEnd = findBytes(data, "\r\n\r\n".getBytes(), headerStart);
+                if (headerEnd == -1) {
+                    pos = nextBoundaryStart;
+                    continue;
+                }
+
+                String headers = new String(data, headerStart, headerEnd - headerStart);
+                int contentStart = headerEnd + 4;
+                int contentEnd = nextBoundaryStart;
+
+                // Remove trailing CRLF before boundary
+                while (contentEnd > contentStart && (data[contentEnd - 1] == '\r' || data[contentEnd - 1] == '\n')) {
+                    contentEnd--;
                 }
 
                 if (headers.contains("name=\"file\"")) {
-                    // This is the file content
+                    // Extract filename
                     if (headers.contains("filename=")) {
                         int fnStart = headers.indexOf("filename=\"") + 10;
                         int fnEnd = headers.indexOf("\"", fnStart);
                         if (fnStart < fnEnd && fnStart > 9) {
                             fileName = headers.substring(fnStart, fnEnd);
-                            System.out.println("[INFO] Parsed filename from headers: " + fileName);
+                            System.out.println("[INFO] Parsed filename: " + fileName);
                         }
                     }
-                    try {
-                        fileContent = content.getBytes("ISO-8859-1"); // Preserve binary data
-                    } catch (UnsupportedEncodingException e) {
-                        throw new RuntimeException(e);
-                    }
+                    // Extract binary content
+                    fileContent = new byte[contentEnd - contentStart];
+                    System.arraycopy(data, contentStart, fileContent, 0, contentEnd - contentStart);
                 } else if (headers.contains("name=\"relativePath\"")) {
-                    // This is the relative path
-                    relativePath = content.trim();
+                    // Extract relative path (text content)
+                    relativePath = new String(data, contentStart, contentEnd - contentStart).trim();
                     System.out.println("[INFO] Parsed relative path: " + relativePath);
                 }
+
+                pos = nextBoundaryStart;
             }
 
             if (fileContent == null) {
@@ -169,9 +183,23 @@ public class HttpServerService {
                 fileContent = data;
             }
 
-            System.out.println("[INFO] Multipart parsing complete - filename: " + fileName +
+            System.out.println("[INFO] Parsing complete - filename: " + fileName +
                     ", relativePath: " + relativePath + ", content size: " + fileContent.length);
             return new MultipartResult(fileName, relativePath, fileContent);
+        }
+
+        private int findBytes(byte[] data, byte[] pattern, int start) {
+            for (int i = start; i <= data.length - pattern.length; i++) {
+                boolean found = true;
+                for (int j = 0; j < pattern.length; j++) {
+                    if (data[i + j] != pattern[j]) {
+                        found = false;
+                        break;
+                    }
+                }
+                if (found) return i;
+            }
+            return -1;
         }
     }
 
